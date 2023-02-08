@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Jan 11 09:53:11 2023
+
+@author: nguyenthidieulinh
+"""
+
+# =============================================================================
+# Task 1: Import data to Python, display first 8 rows and find shape of data
+# =============================================================================
+
+# Import data to Python
+import pandas as pd
+
+path = '/Users/nguyenthidieulinh/Desktop/UK/School subjects/Python/Assignment 2/financials.csv' #File data's path in computer
+
+df = pd.read_csv(path)
+
+# Display the first 8 rows
+first_8rows_df = df.head(8)
+
+print('The first 8 rows of the dataset is:\n',first_8rows_df)
+
+# Shape of data frame
+shape_df = df.shape
+
+print('The shape of the dataset is ',shape_df)
+
+# =============================================================================
+# Task 2: Handle missing data and basic statistics
+# =============================================================================
+
+### Task 2.1: Handling missing data
+
+## Dataset analyzing
+# Calculate total observations by sector
+# Group the DataFrame by stock market sector
+group_by_sector = df.groupby('Stock_Market_Sector')
+# Count the number of observations in each sector
+obs_per_sector = group_by_sector.size()
+print('The total number of observations in each sector is:\n',obs_per_sector)
+
+## Check validation of values in dataset
+
+# Check if the categorical clolumns contain any numerical or blank values
+cate_columns_to_check = ['Company_Name', 'Stock_Market_Sector']
+
+for column in cate_columns_to_check:
+    has_numerical = df[column].astype(str).str.isnumeric().any()
+    has_blank = df[column].astype(str).str.isspace().any()
+    print('The categorical columns contain numerical values. Its ',has_numerical)
+    print('The categorical columns contain blanks. Its ',has_blank)
+
+# Check if the numerical clolumns contain any categorical or blank values
+# Get a list of numerical columns to process
+numerical_columns = [c for c in df.columns if c not in ["Company_Name", "Stock_Market_Sector"]]
+
+# Select columns contain categorical values
+column_has_cate_value = df[numerical_columns].select_dtypes(include=['object', 'bool'])
+# Check if any of columns above contains a blank value
+has_blank_categorical = column_has_cate_value.isna().any().any()
+# Check if any other columns contains a blank value
+has_blank_other = df[numerical_columns].isna().any().any()
+# Check if at least one column contains a blank value or categorical value
+has_blank = has_blank_categorical or has_blank_other
+
+print('There is at least one numerical column having categorical or blank value. Its ',has_blank)
+
+
+## Handle missing data in dataset
+# Convert values of numerical columns to numeric and replace unconvertible values (str, blanks) with NaN
+df[numerical_columns] = df[numerical_columns].apply(pd.to_numeric, errors='coerce')
+# See numerical columns now
+
+print('The data set after replacing missing value with NaN will look like:\n', df[numerical_columns].head(8))
+
+# Check in numerical columns except for column 'Earnings/Share', 'Price/Earnings', 'EBITDA', are there any columns whose values are smaller than 0
+
+def check_columns(df, numerical_columns):
+    for column in numerical_columns:
+        if column not in ['Earnings/Share', 'Price/Earnings', 'EBITDA']:
+            for value in df[column]:
+                if value < 0:
+                    return True
+    return False
+print('Excep for three columns, there is at least column having negative value. Its ',check_columns(df, numerical_columns))
+
+
+## Missing value analyzing
+
+# Calculate total number of missing values in each column
+nan_per_col = df.isna().sum()
+# Print the result
+print('The total number of missing value in each column is:\n',nan_per_col)
+
+
+# Calculate total number of missing values in each sector
+
+# Group the DataFrame by 'Stock_Market_Sector'
+grouped_has_nan = df.isna().groupby(df['Stock_Market_Sector'])
+# Count the number of NaN values in each column for each group
+nan_per_sec = grouped_has_nan.sum()
+# Print the result
+print('The total number of missing value in each sector is:\n',nan_per_sec)
+
+
+## Missing data processing: replace missing data of each sector with its corresponding mean
+
+df.fillna(df.groupby("Stock_Market_Sector").transform("mean"),inplace=True)
+
+# Print the first 8 rows of new dataset to check
+print('The first 8 rows of new data set is:\n',df.head(8))
+
+# Check if dataframe contains missing values now
+any_nan = df.isna().any().any()
+print('There are still missing values in the dataset now. Its ',any_nan)
+
+
+### Task 2.2: Basic statistical details of numeric columns
+stat_num_col = df.describe()
+print('Basic statistical details of numeric columns are:\n',stat_num_col)
+
+### Task 2.3: Basic statistical details of categorical columns
+stat_cate_col = df.describe(include=['object', 'bool'])
+print('Basic statistical details of categorical columns are:\n',stat_cate_col)
+
+# =============================================================================
+# Task 3: Handle missing data and basic statistics
+# =============================================================================
+
+# Task 3.1
+
+import plotly.express as px
+
+market_cap = df['Market_Cap'].sum()
+
+#calculate the market cap for each sector
+sector_market_cap = df.groupby(['Stock_Market_Sector'])['Market_Cap'].sum()
+# calculate the market cap for each company in each sector
+company_market_cap = df.groupby(['Company_Name','Stock_Market_Sector'])['Market_Cap'].sum()
+
+# Market cap value of each company in sector
+marketcap_com_sector = company_market_cap/sector_market_cap
+
+# Weight of sector in the market
+weight_sector = sector_market_cap/market_cap
+
+# Percentage marketcap of each company
+per_com_sector = (company_market_cap/sector_market_cap)*100
+display = per_com_sector.apply(lambda x: "{:.2f}%".format(x))
+
+
+data = {'Company': per_com_sector.index.get_level_values(0), 
+        'Sector': per_com_sector.index.get_level_values(1),
+        'Display': display.values,
+        'Weight': company_market_cap.values,
+        'Percentage': per_com_sector.values}
+
+df1 = pd.DataFrame(data)
+df1 = df1.sort_values(by='Percentage',ascending=False)
+
+
+
+fig = px.treemap(df1, 
+                 path=[px.Constant('Percentage of stocks in each sector by Market cap'), 
+                       'Sector','Company','Display'],
+                 values='Weight', color='Percentage',
+                 color_continuous_scale=px.colors.sequential.Reds)
+
+fig.update_layout(width=800, height=800)
+fig.show()
+
+# Task 3.2
+
+# Importing seaborn package
+import seaborn as sn
+# Import matplotlib package
+import matplotlib.pyplot as plt
+
+# Finding correlation between columns
+cor_col_matrix = df.corr(method ='pearson')
+
+# Display result
+print("Correlation matrix in DataFrame is:\n",cor_col_matrix,"\n")
+
+# Visualising Correlation
+sn.heatmap(cor_col_matrix, annot=True)
+
+print(plt.show())
+
+## Task 3.3
+
+# Find the name of the company which has 
+###(a) Maximum & Minimum Dividend Yield
+
+# Set column 'Company_Name'as the index of the df
+df.set_index('Company_Name',inplace=True)
+
+# Find which index has smallest dividend yield
+
+company_min_dividend = df['Dividend Yield'].idxmin()
+
+# Find which index has biggest dividend yield
+company_max_dividend = df['Dividend Yield'].idxmax()
+
+print('Company has maximum dividend yield is ', company_max_dividend)
+print('Company has minimum dividend yield is ', company_min_dividend)
+
+###(b) Maximum & Minimum Earnings/Share 
+
+company_min_E_S = df['Earnings/Share'].idxmin() # Company has smallest Earnings/Share
+company_max_E_S = df['Earnings/Share'].idxmax() # Company has largest Earnings/Share
+
+print('Company has maximum Earnings/Share is ', company_max_E_S)
+print('Company has minimum Earnings/Share is ', company_min_E_S)
+
+###(c) Maximum & Minimum Price/Sales
+
+company_min_P_S = df['Price/Sales'].idxmin() # Company has smallest Price/Sales
+company_max_P_S = df['Price/Sales'].idxmax() # Company has smallest Price/Sales
+
+print('Company has maximum Price/Sales is ', company_max_P_S)
+print('Company has minimum Price/Sales is ', company_min_P_S)
+
+
+# Task 3.4 Calculate the probability of dividend yield greater than 2.181 for "Real Estate", 
+
+from scipy.stats import binom
+
+def pro(sector):
+    df_sector = df[df['Stock_Market_Sector'] == sector]
+    # Number of company in this sector
+    n = len(df_sector)
+    # Number of company having dividend greater than 2.181
+    k=len(df_sector[df_sector['Dividend Yield'] > 2.181])
+    # The probility of success on a single trial
+    p=k/n
+    prob = binom.pmf(k, n, p)
+    prob = round(prob, 3)
+    return prob
+
+# probability of dividend yield greater than 2.181 for "Real Estate"
+print('the probability of dividend yield greater than 2.181 for "Real Estate" is ',pro('Real Estate'))
+
+# for "Financials"
+print('the probability of dividend yield greater than 2.181 for "Financials" is ',pro('Financials'))
+
+# for "Energy" sectors
+print('the probability of dividend yield greater than 2.181 for "Energy" is ',pro('Energy'))
+
+
+# Task 3.5
+# a) Bar plot Earnings/Share for each market sector
+
+def bar_plot(Feature):
+    # Calculate mean of Feature for each market sector
+    mean_per_sec = df.groupby(by='Stock_Market_Sector')[Feature].mean()
+    return mean_per_sec.plot.bar() #bar plot
+
+
+
+# b) Bar plot Dividend Yield for each market sector
+
+bar_plot('Dividend Yield')
+# set the title and labels
+plt.title("Dividend Yield by Market Sector")
+plt.xlabel("Stock Market Sector")
+plt.ylabel("Dividend Yield")
+plt.show()
+
+
+
+
+
+
+
+
+
+
